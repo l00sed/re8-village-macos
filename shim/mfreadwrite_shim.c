@@ -928,6 +928,32 @@ static void InitVtables(void) {
     }
 }
 
+/* ============ Flag file for launchd decode server trigger ============ */
+
+#define FLAG_FILE "C:\\re8_video_fix.active"
+
+static void CreateFlagFile(void) {
+    HANDLE h = CreateFileA(FLAG_FILE, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
+                           FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h != INVALID_HANDLE_VALUE) {
+        /* Write PID so the decode server can verify the game is still running */
+        char buf[64];
+        int len = sprintf(buf, "%lu", (unsigned long)GetCurrentProcessId());
+        DWORD written;
+        WriteFile(h, buf, (DWORD)len, &written, NULL);
+        CloseHandle(h);
+        Log("Created flag file %s (pid=%s)", FLAG_FILE, buf);
+    } else {
+        Log("WARNING: Failed to create flag file %s (err=%lu)", FLAG_FILE, GetLastError());
+    }
+}
+
+static void DeleteFlagFile(void) {
+    if (DeleteFileA(FLAG_FILE)) {
+        Log("Deleted flag file %s", FLAG_FILE);
+    }
+}
+
 /* ============ DLL Entry Point ============ */
 
 BOOL WINAPI DllMain(HINSTANCE hInstance, DWORD reason, LPVOID reserved) {
@@ -935,9 +961,11 @@ BOOL WINAPI DllMain(HINSTANCE hInstance, DWORD reason, LPVOID reserved) {
         LogInit();
         Log("DllMain: DLL_PROCESS_ATTACH");
         InitVtables();
+        CreateFlagFile();
         Log("DllMain: initialized, %d readers, %d known videos", MAX_READERS, NUM_KNOWN_VIDEOS);
     } else if (reason == DLL_PROCESS_DETACH) {
         Log("DllMain: DLL_PROCESS_DETACH");
+        DeleteFlagFile();
         if (g_logFile) { fflush(g_logFile); fclose(g_logFile); g_logFile = NULL; }
     }
     return TRUE;

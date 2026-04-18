@@ -66,15 +66,23 @@ re8.exe                        decode_server.sh
 git clone https://github.com/youruser/re8-village-macos.git
 cd re8-village-macos
 
-# Install (copies DLL, sets Wine overrides, configures bottle)
+# Install (copies DLL, sets Wine overrides, installs auto-launch agent)
 ./install.sh
 
-# Play (starts decode server automatically, cleans up on exit)
-./play.sh
+# That's it -- just launch RE8 from Steam normally.
+# The decode server starts and stops automatically.
 ```
 
-That's it. The `play.sh` script handles starting the decode server, launching
-the game, and cleaning up temp files when you're done.
+After running `install.sh`, you launch the game from Steam like normal. The
+installer sets up a macOS launchd agent that automatically starts the decode
+server when the game runs and stops it when the game exits. No manual steps
+needed.
+
+If you prefer to manage the decode server manually, use `play.sh` instead:
+
+```bash
+./play.sh   # starts decode server, launches game, cleans up on exit
+```
 
 ## Installation Details
 
@@ -88,6 +96,9 @@ the game, and cleaning up temp files when you're done.
    - `D3DM_ENABLE_METALFX=0` -- MetalFX must be off or video playback stalls
    - `DXMT_ENABLE_NVEXT=0` -- Same issue with NVIDIA extensions emulation
 4. **Disables CrashReport.exe** -- Wine's auto-debugger interferes with the game
+5. **Installs a launchd agent** -- auto-starts the decode server when the game
+   runs (triggered by a flag file the shim creates on load) and stops it when
+   the game exits
 
 ### Custom Bottle Name
 
@@ -122,10 +133,11 @@ x86_64-w64-mingw32-gcc -shared \
 
 ```
 .
-├── play.sh                    # Launch script (start decode server + game)
-├── install.sh                 # One-time setup
+├── play.sh                    # Manual launch script (alternative to auto-launch)
+├── install.sh                 # One-time setup (DLL, overrides, launchd agent)
+├── uninstall.sh               # Remove everything
 ├── shim/
-│   ├── mfreadwrite_shim.c     # Shim DLL source (~1000 lines of C)
+│   ├── mfreadwrite_shim.c     # Shim DLL source (~1100 lines of C)
 │   ├── mfreadwrite.def        # DLL export definitions
 │   └── mfreadwrite.dll        # Pre-built PE32+ x86_64 DLL
 └── scripts/
@@ -153,6 +165,18 @@ The shim writes a log to `C:\mf_shim_debug.log` inside the Wine bottle
 
 This shows every MF API call, frame delivery timing, and whether frames
 came from the decoded video file (REAL) or the black fallback (BLACK).
+
+The decode server logs to `~/Library/Logs/re8-decode-server.log`.
+
+## Uninstalling
+
+```bash
+./uninstall.sh
+```
+
+This removes the launchd agent, shim DLL, and restores CrashReport.exe.
+DLL overrides and environment variables are left in the bottle config
+(remove manually via CrossOver's Wine Configuration if needed).
 
 ## Technical Background
 
