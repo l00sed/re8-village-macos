@@ -1,0 +1,8 @@
+LIBRARY mfreadwrite
+
+EXPORTS
+    MFCreateSourceReaderFromByteStream @1
+    MFCreateSourceReaderFromMediaSource @2
+    MFCreateSourceReaderFromURL @3
+    MFCreateSinkWriterFromMediaSink @4
+    MFCreateSinkWriterFromURL @5
