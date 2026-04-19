@@ -172,7 +172,7 @@ For the full chain of issues that were diagnosed and solved:
 ## Performance
 
 On Apple M3 Pro (16GB):
-- 50-60 FPS in-game (without) ray tracing enabled
+- 50-60 FPS in-game (without ray tracing enabled)
 - D3DMetal translates DirectX 12 to Metal
 - Game auto-configures to DX12 via the D3DMetal backend
 
