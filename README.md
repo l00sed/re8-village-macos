@@ -1,5 +1,15 @@
 # Resident Evil Village (RE8) - macOS Video Fix for CrossOver
 
+> **This repo has been superseded by [re-engine-macos](https://github.com/l00sed/re-engine-macos)**, a unified monorepo that supports all RE Engine games (RE3, RE8, RE7, RE2, RE4) with a single shared codebase.
+>
+> **If you're installing for the first time**, use the new repo instead.
+>
+> **If you're upgrading from this repo**, uninstall first (`./uninstall.sh`), then follow the new repo's instructions. The file naming convention has changed (`movie_*.bin` -> `re8_movie_*.bin`).
+>
+> This repo is preserved for reference but will no longer be updated.
+
+---
+
 Resident Evil Village runs on macOS via CrossOver at 50-60 FPS (without ray tracing) on Apple Silicon— but, it crashes on startup when trying to play the first intro video. CodeWeavers officially rates this game **"Installs, Will Not Run."**
 
 This fix makes it run— with full video playback for intros and cutscenes.
