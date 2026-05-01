@@ -14,7 +14,14 @@
 #   - ffmpeg (brew install ffmpeg)
 #   - x86_64-w64-mingw32-gcc (only if building from source)
 #
-# Usage: ./install.sh [--bottle NAME] [--crossover PATH]
+# Usage: ./install.sh [--bottle NAME] [--crossover PATH] [--bottle-dir PATH] [--game-dir PATH]
+#
+# If your Steam library — or the entire CrossOver bottle — lives on an
+# external drive (or anywhere outside the default
+# ~/Library/Application Support/CrossOver/Bottles location), pass
+# --bottle-dir / --game-dir, set RE8_BOTTLE_DIR / RE8_GAME_DIR, or let the
+# installer prompt you with a native macOS folder picker when the default
+# locations can't be found.
 #
 set -euo pipefail
 
@@ -22,24 +29,30 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BOTTLE="${RE8_BOTTLE:-Steam}"
 CX_APP="${RE8_CROSSOVER:-$HOME/Applications/CrossOver.app}"
 CX_ROOT="$CX_APP/Contents/SharedSupport/CrossOver"
+BOTTLE_DIR_OVERRIDE="${RE8_BOTTLE_DIR:-}"
+GAME_DIR_OVERRIDE="${RE8_GAME_DIR:-}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --bottle)    BOTTLE="$2"; shift 2 ;;
-        --crossover) CX_APP="$2"; CX_ROOT="$CX_APP/Contents/SharedSupport/CrossOver"; shift 2 ;;
+        --bottle)     BOTTLE="$2"; shift 2 ;;
+        --crossover)  CX_APP="$2"; CX_ROOT="$CX_APP/Contents/SharedSupport/CrossOver"; shift 2 ;;
+        --bottle-dir) BOTTLE_DIR_OVERRIDE="$2"; shift 2 ;;
+        --game-dir)   GAME_DIR_OVERRIDE="$2"; shift 2 ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
 
-BOTTLE_DIR="$HOME/Library/Application Support/CrossOver/Bottles/$BOTTLE"
-DRIVE_C="$BOTTLE_DIR/drive_c"
-GAME_DIR="$DRIVE_C/Program Files (x86)/Steam/steamapps/common/Resident Evil Village BIOHAZARD VILLAGE"
-USER_REG="$BOTTLE_DIR/user.reg"
-CXBOTTLE="$BOTTLE_DIR/cxbottle.conf"
+DEFAULT_BOTTLE_DIR="$HOME/Library/Application Support/CrossOver/Bottles/$BOTTLE"
+BOTTLE_DIR="${BOTTLE_DIR_OVERRIDE:-$DEFAULT_BOTTLE_DIR}"
+# DRIVE_C / USER_REG / CXBOTTLE / FLAG_FILE / DEFAULT_GAME_DIR are derived
+# AFTER bottle-dir resolution (see preflight section below) so an interactive
+# picker can update BOTTLE_DIR before they're computed.
+
+CONFIG_DIR="$HOME/.config/re8-village-macos"
+CONFIG_FILE="$CONFIG_DIR/config"
 
 PLIST_LABEL="com.re8fix.decode-server"
 PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
-FLAG_FILE="$DRIVE_C/re8_video_fix.active"
 
 fail() { echo "ERROR: $1" >&2; exit 1; }
 ok()   { echo "  OK: $1"; }
@@ -49,17 +62,118 @@ echo "============================================"
 echo " RE8 Village Video Fix - Installer"
 echo "============================================"
 echo ""
-echo "Bottle:    $BOTTLE"
-echo "CrossOver: $CX_APP"
+echo "Bottle:     $BOTTLE"
+echo "CrossOver:  $CX_APP"
+[[ -n "$BOTTLE_DIR_OVERRIDE" ]] && echo "Bottle dir: $BOTTLE_DIR (override)"
+[[ -n "$GAME_DIR_OVERRIDE" ]]   && echo "Game dir:   $GAME_DIR_OVERRIDE (override)"
 echo ""
 
 # ---------- Preflight ----------
 
 echo "Checking prerequisites..."
 
-[[ -d "$CX_ROOT" ]]         || fail "CrossOver not found at $CX_APP"
-[[ -d "$BOTTLE_DIR" ]]      || fail "Bottle '$BOTTLE' not found at $BOTTLE_DIR"
-[[ -f "$GAME_DIR/re8.exe" ]] || fail "RE8 not installed. Install it via Steam in the '$BOTTLE' bottle first."
+[[ -d "$CX_ROOT" ]] || fail "CrossOver not found at $CX_APP"
+
+# ---------- Locate bottle directory (supports bottles stored on external drives) ----------
+
+prompt_for_folder() {
+    # Generic native macOS folder picker. $1 is the dialog prompt.
+    local prompt="$1"
+    local picked
+    picked=$(/usr/bin/osascript <<OSA 2>/dev/null || true
+try
+    set chosen to choose folder with prompt "${prompt}"
+    POSIX path of chosen
+on error
+    return ""
+end try
+OSA
+    )
+    picked="${picked%/}"
+    printf '%s' "$picked"
+}
+
+bottle_dir_looks_valid() {
+    # A real CrossOver bottle has cxbottle.conf and a drive_c subdirectory.
+    [[ -f "$1/cxbottle.conf" && -d "$1/drive_c" ]]
+}
+
+if ! bottle_dir_looks_valid "$BOTTLE_DIR"; then
+    if [[ -n "$BOTTLE_DIR_OVERRIDE" ]]; then
+        fail "Bottle directory '$BOTTLE_DIR' is not a valid CrossOver bottle (missing cxbottle.conf or drive_c)."
+    fi
+
+    echo ""
+    echo "CrossOver bottle '$BOTTLE' was not found at the default location:"
+    echo "  $DEFAULT_BOTTLE_DIR"
+    echo ""
+    echo "This is normal if your bottle lives on an external drive (e.g. under"
+    echo "/Volumes/...) or in a custom CrossOver bottle directory."
+    echo ""
+    read -r -p "Open a folder picker to select the bottle directory manually? [Y/n] " reply
+    reply="${reply:-Y}"
+    if [[ ! "$reply" =~ ^[Yy] ]]; then
+        fail "Bottle '$BOTTLE' not found at $BOTTLE_DIR. Re-run with --bottle-dir PATH."
+    fi
+
+    picked_bottle="$(prompt_for_folder "Select your CrossOver bottle folder (the one that contains cxbottle.conf and drive_c):")"
+    [[ -n "$picked_bottle" ]] || fail "No folder selected."
+    bottle_dir_looks_valid "$picked_bottle" || fail "Selected folder is not a valid CrossOver bottle (missing cxbottle.conf or drive_c): $picked_bottle"
+    BOTTLE_DIR="$picked_bottle"
+fi
+
+# Now that BOTTLE_DIR is known, derive the rest. DRIVE_C / FLAG_FILE stay
+# inside the bottle even when the game itself lives on an external drive,
+# because the compiled shim writes the flag and intermediate buffers via the
+# bottle's C: drive.
+DRIVE_C="$BOTTLE_DIR/drive_c"
+USER_REG="$BOTTLE_DIR/user.reg"
+CXBOTTLE="$BOTTLE_DIR/cxbottle.conf"
+FLAG_FILE="$DRIVE_C/re8_video_fix.active"
+DEFAULT_GAME_DIR="$DRIVE_C/Program Files (x86)/Steam/steamapps/common/Resident Evil Village BIOHAZARD VILLAGE"
+GAME_DIR="${GAME_DIR_OVERRIDE:-$DEFAULT_GAME_DIR}"
+
+ok "Bottle found at $BOTTLE_DIR"
+
+# ---------- Locate game directory (supports external drives / non-default Steam libraries) ----------
+
+prompt_for_game_dir() {
+    prompt_for_folder "Select your 'Resident Evil Village BIOHAZARD VILLAGE' folder (the directory containing re8.exe):"
+}
+
+if [[ ! -f "$GAME_DIR/re8.exe" ]]; then
+    if [[ -n "$GAME_DIR_OVERRIDE" ]]; then
+        fail "RE8 not found at the path you provided: $GAME_DIR"
+    fi
+
+    echo ""
+    echo "RE8 was not found at the default location:"
+    echo "  $DEFAULT_GAME_DIR"
+    echo ""
+    echo "This is normal if your Steam library lives on an external drive or"
+    echo "in a custom location."
+    echo ""
+    read -r -p "Open a folder picker to select the game directory manually? [Y/n] " reply
+    reply="${reply:-Y}"
+    if [[ ! "$reply" =~ ^[Yy] ]]; then
+        fail "RE8 not installed. Install it via Steam in the '$BOTTLE' bottle, or re-run with --game-dir PATH."
+    fi
+
+    picked_dir="$(prompt_for_game_dir)"
+    [[ -n "$picked_dir" ]] || fail "No folder selected."
+    [[ -f "$picked_dir/re8.exe" ]] || fail "Selected folder does not contain re8.exe: $picked_dir"
+    GAME_DIR="$picked_dir"
+fi
+
+# Persist the resolved paths so play.sh and uninstall.sh find them.
+mkdir -p "$CONFIG_DIR"
+cat > "$CONFIG_FILE" <<CFG
+# Auto-generated by install.sh — safe to delete (uninstall removes it).
+RE8_BOTTLE="$BOTTLE"
+RE8_BOTTLE_DIR="$BOTTLE_DIR"
+RE8_GAME_DIR="$GAME_DIR"
+CFG
+ok "Saved configuration to $CONFIG_FILE"
 
 FFMPEG="$(command -v ffmpeg 2>/dev/null || echo "")"
 if [[ -z "$FFMPEG" ]]; then

@@ -4,22 +4,37 @@
 #
 # Removes the launchd agent, shim DLL, and restores original settings.
 #
-# Usage: ./uninstall.sh [--bottle NAME]
+# Usage: ./uninstall.sh [--bottle NAME] [--bottle-dir PATH] [--game-dir PATH]
 #
 set -euo pipefail
 
+CONFIG_DIR="$HOME/.config/re8-village-macos"
+CONFIG_FILE="$CONFIG_DIR/config"
+# Pick up persisted RE8_BOTTLE / RE8_BOTTLE_DIR / RE8_GAME_DIR if install.sh
+# wrote them.
+if [[ -f "$CONFIG_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$CONFIG_FILE"
+fi
+
 BOTTLE="${RE8_BOTTLE:-Steam}"
+BOTTLE_DIR_OVERRIDE="${RE8_BOTTLE_DIR:-}"
+GAME_DIR_OVERRIDE="${RE8_GAME_DIR:-}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --bottle) BOTTLE="$2"; shift 2 ;;
+        --bottle)     BOTTLE="$2"; shift 2 ;;
+        --bottle-dir) BOTTLE_DIR_OVERRIDE="$2"; shift 2 ;;
+        --game-dir)   GAME_DIR_OVERRIDE="$2"; shift 2 ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
 
-BOTTLE_DIR="$HOME/Library/Application Support/CrossOver/Bottles/$BOTTLE"
+DEFAULT_BOTTLE_DIR="$HOME/Library/Application Support/CrossOver/Bottles/$BOTTLE"
+BOTTLE_DIR="${BOTTLE_DIR_OVERRIDE:-$DEFAULT_BOTTLE_DIR}"
 DRIVE_C="$BOTTLE_DIR/drive_c"
-GAME_DIR="$DRIVE_C/Program Files (x86)/Steam/steamapps/common/Resident Evil Village BIOHAZARD VILLAGE"
+DEFAULT_GAME_DIR="$DRIVE_C/Program Files (x86)/Steam/steamapps/common/Resident Evil Village BIOHAZARD VILLAGE"
+GAME_DIR="${GAME_DIR_OVERRIDE:-$DEFAULT_GAME_DIR}"
 
 PLIST_LABEL="com.re8fix.decode-server"
 PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
@@ -64,6 +79,14 @@ rm -f "$DRIVE_C"/re8_video_*.nv12
 rm -f "$DRIVE_C"/re8_video_*.info
 rm -f "$DRIVE_C"/mf_shim_debug.log
 rm -f "$DRIVE_C"/.decoded_movie_*
+
+# ---------- Remove persisted config ----------
+
+if [[ -f "$CONFIG_FILE" ]]; then
+    rm -f "$CONFIG_FILE"
+    rmdir "$CONFIG_DIR" 2>/dev/null || true
+    echo "  Removed config file $CONFIG_FILE"
+fi
 
 echo ""
 echo "Uninstall complete."

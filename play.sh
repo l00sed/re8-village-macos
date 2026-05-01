@@ -7,11 +7,19 @@
 #   2. Launches the game through Steam/CrossOver
 #   3. Cleans up when the game exits
 #
-# Usage: ./play.sh [--bottle NAME] [--crossover PATH]
+# Usage: ./play.sh [--bottle NAME] [--crossover PATH] [--bottle-dir PATH] [--game-dir PATH]
 #
 set -euo pipefail
 
 # ---------- Configuration (override via env or flags) ----------
+
+CONFIG_FILE="$HOME/.config/re8-village-macos/config"
+# Load persisted settings written by install.sh (sets RE8_BOTTLE,
+# RE8_BOTTLE_DIR, RE8_GAME_DIR unless the user has already exported them).
+if [[ -f "$CONFIG_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$CONFIG_FILE"
+fi
 
 BOTTLE="${RE8_BOTTLE:-Steam}"
 CX_APP="${RE8_CROSSOVER:-$HOME/Applications/CrossOver.app}"
@@ -19,18 +27,25 @@ CX_ROOT="$CX_APP/Contents/SharedSupport/CrossOver"
 FFMPEG="${RE8_FFMPEG:-$(command -v ffmpeg 2>/dev/null || echo /opt/homebrew/bin/ffmpeg)}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_ID="1196590"
+BOTTLE_DIR_OVERRIDE="${RE8_BOTTLE_DIR:-}"
+GAME_DIR_OVERRIDE="${RE8_GAME_DIR:-}"
 
 # Parse flags
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --bottle)  BOTTLE="$2"; shift 2 ;;
-        --crossover) CX_APP="$2"; CX_ROOT="$CX_APP/Contents/SharedSupport/CrossOver"; shift 2 ;;
+        --bottle)     BOTTLE="$2"; shift 2 ;;
+        --crossover)  CX_APP="$2"; CX_ROOT="$CX_APP/Contents/SharedSupport/CrossOver"; shift 2 ;;
+        --bottle-dir) BOTTLE_DIR_OVERRIDE="$2"; shift 2 ;;
+        --game-dir)   GAME_DIR_OVERRIDE="$2"; shift 2 ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
 
-DRIVE_C="$HOME/Library/Application Support/CrossOver/Bottles/$BOTTLE/drive_c"
-GAME_DIR="$DRIVE_C/Program Files (x86)/Steam/steamapps/common/Resident Evil Village BIOHAZARD VILLAGE"
+DEFAULT_BOTTLE_DIR="$HOME/Library/Application Support/CrossOver/Bottles/$BOTTLE"
+BOTTLE_DIR="${BOTTLE_DIR_OVERRIDE:-$DEFAULT_BOTTLE_DIR}"
+DRIVE_C="$BOTTLE_DIR/drive_c"
+DEFAULT_GAME_DIR="$DRIVE_C/Program Files (x86)/Steam/steamapps/common/Resident Evil Village BIOHAZARD VILLAGE"
+GAME_DIR="${GAME_DIR_OVERRIDE:-$DEFAULT_GAME_DIR}"
 
 # ---------- Preflight checks ----------
 

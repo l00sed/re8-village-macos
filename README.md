@@ -102,6 +102,55 @@ If your bottle isn't named "Steam":
 ./play.sh --bottle "My Bottle"
 ```
 
+### External Drives & Custom Install Locations
+
+If your CrossOver bottle or your Steam library lives outside the default
+locations (for example on an external SSD under `/Volumes/...`), the installer
+supports two additional overrides:
+
+| Flag | Env var | What it points at |
+|------|---------|-------------------|
+| `--bottle-dir PATH` | `RE8_BOTTLE_DIR` | The bottle folder containing `cxbottle.conf` and `drive_c` |
+| `--game-dir PATH`   | `RE8_GAME_DIR`   | The game folder containing `re8.exe` |
+
+**Easiest path — just run the installer.** If either default location is
+missing, the installer prints the path it tried, then asks:
+
+```
+Open a folder picker to select the bottle directory manually? [Y/n]
+```
+
+Press <kbd>Enter</kbd> and a native macOS folder picker appears so you can
+browse to the right folder without typing long paths. The installer validates
+the selection (checks for `cxbottle.conf` / `drive_c` for the bottle, and
+`re8.exe` for the game).
+
+**Power-user path — pass flags directly:**
+
+```bash
+./install.sh \
+  --bottle "Resident Evil 7 & 8" \
+  --bottle-dir "/Volumes/SSDGaming/CrossOver/Bottles/Resident Evil 7 & 8" \
+  --game-dir   "/Volumes/SSDGaming/CrossOver/Bottles/Resident Evil 7 & 8/drive_c/Program Files (x86)/Steam/steamapps/common/Resident Evil Village BIOHAZARD VILLAGE"
+```
+
+(You can usually omit `--game-dir`: if the bottle path is correct and the game
+sits inside it at the standard Steam location, the installer finds it
+automatically.)
+
+**The choice persists.** The resolved paths are written to
+`~/.config/re8-village-macos/config`, so subsequent runs of `play.sh` and
+`uninstall.sh` work with no flags. Override per-run via the same flags or env
+vars if you need to. Re-run `./install.sh` (or edit / delete the config file)
+to change the saved paths.
+
+> **Note:** Even when the bottle and game live on an external drive, the shim
+> DLL writes its flag file (`re8_video_fix.active`) and intermediate video
+> buffers (`movie_*.bin`, `re8_video_*.nv12`) inside the bottle's `drive_c`,
+> because the path is hardcoded into the compiled DLL as `C:\...`. The decode
+> server and launchd agent automatically follow `RE8_BOTTLE_DIR` to watch the
+> right location.
+
 ### Custom CrossOver Location
 
 ```bash
@@ -163,7 +212,10 @@ The decode server logs to `~/Library/Logs/re8-decode-server.log`.
 ./uninstall.sh
 ```
 
-This removes the launchd agent, shim DLL, and restores CrashReport.exe. DLL overrides and environment variables are left in the bottle config (remove manually via CrossOver's Wine Configuration if needed).
+This removes the launchd agent, shim DLL, restores CrashReport.exe, and
+deletes the persisted config file at `~/.config/re8-village-macos/config`.
+DLL overrides and environment variables are left in the bottle config (remove
+manually via CrossOver's Wine Configuration if needed).
 
 ## Technical Background
 
