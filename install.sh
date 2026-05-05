@@ -186,6 +186,54 @@ ok "ffmpeg found at $FFMPEG"
 
 ok "RE8 found at $GAME_DIR"
 
+# ---------- External-volume / Full Disk Access advisory ----------
+#
+# launchd-spawned processes (like our decode-server agent) run in macOS' user
+# launchd context and do NOT inherit Terminal's "Files & Folders" / Removable
+# Volume TCC permissions. If the bottle or game lives under /Volumes/...
+# (e.g. an external SSD), the agent's bash will silently fail to read those
+# paths — its glob for movie_*.bin expands to nothing, no decode happens, and
+# the shim falls back to BLACK frames forever.
+#
+# There is no API to grant TCC programmatically; the user must add /bin/bash
+# to Full Disk Access manually. We detect the situation and print clear
+# instructions, plus offer play.sh (foreground, inherits Terminal's perms) as
+# a no-TCC-needed fallback.
+
+uses_external_volume=0
+case "$BOTTLE_DIR" in /Volumes/*) uses_external_volume=1 ;; esac
+case "$GAME_DIR"   in /Volumes/*) uses_external_volume=1 ;; esac
+
+if [[ $uses_external_volume -eq 1 ]]; then
+    echo ""
+    echo "============================================"
+    echo " NOTICE: External volume detected"
+    echo "============================================"
+    echo ""
+    echo "Your bottle and/or game directory lives under /Volumes/. The auto-"
+    echo "launch decode server is started by macOS launchd, which does NOT"
+    echo "inherit Terminal's permissions for external/removable volumes."
+    echo ""
+    echo "If you skip the step below, the game will load but every video will"
+    echo "be black: the decode server can't read the dumped movie_*.bin files,"
+    echo "so the shim serves black fallback frames."
+    echo ""
+    echo "TO FIX (one-time, takes ~30 seconds):"
+    echo "  1. Open System Settings -> Privacy & Security -> Full Disk Access"
+    echo "  2. Click '+', then press Cmd+Shift+G"
+    echo "  3. Type: /bin/bash   then press Enter -> Open -> Add"
+    echo "  4. Make sure the toggle next to /bin/bash is ON"
+    echo ""
+    echo "After granting FDA, run:"
+    echo "    launchctl kickstart -k gui/\$(id -u)/${PLIST_LABEL}"
+    echo "  to restart the agent (or just reboot)."
+    echo ""
+    echo "Alternative: skip the launchd agent entirely and use ./play.sh"
+    echo "to launch the game. play.sh runs the decode server in your"
+    echo "Terminal session, which already has the right permissions."
+    echo ""
+fi
+
 # ---------- Step 1: Install shim DLL ----------
 
 echo ""
@@ -366,6 +414,14 @@ echo "  - It stops automatically when the game exits"
 echo ""
 echo "Logs: $LOG_DIR/re8-decode-server.log"
 echo ""
+if [[ $uses_external_volume -eq 1 ]]; then
+    echo "REMINDER: Your bottle/game is on /Volumes/. If videos are black,"
+    echo "  add /bin/bash to System Settings -> Privacy & Security ->"
+    echo "  Full Disk Access, then run:"
+    echo "    launchctl kickstart -k gui/\$(id -u)/${PLIST_LABEL}"
+    echo "  See the NOTICE above for details. Or just use ./play.sh instead."
+    echo ""
+fi
 echo "To uninstall: ./uninstall.sh"
 echo "Manual launch (if needed): ./play.sh"
 echo ""

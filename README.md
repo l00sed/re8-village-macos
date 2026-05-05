@@ -151,6 +151,26 @@ to change the saved paths.
 > server and launchd agent automatically follow `RE8_BOTTLE_DIR` to watch the
 > right location.
 
+> **Important — Full Disk Access required for external volumes.** macOS
+> launchd-spawned processes do NOT inherit Terminal's permissions for
+> removable/external volumes (anything under `/Volumes/`). If your bottle or
+> game lives on an external SSD, the auto-launch decode server's `bash`
+> cannot read the dumped `movie_*.bin` files, so the shim falls back to
+> black frames forever and the game appears to "install but not run".
+>
+> **Fix (one time):** System Settings → Privacy & Security → **Full Disk
+> Access** → **+** → press <kbd>⌘⇧G</kbd> → type `/bin/bash` → Add →
+> ensure the toggle is **on**. Then restart the agent:
+>
+> ```bash
+> launchctl kickstart -k gui/$(id -u)/com.re8fix.decode-server
+> ```
+>
+> The installer detects external-volume bottles and prints these instructions
+> automatically. If you'd rather avoid granting `/bin/bash` Full Disk Access,
+> use `./play.sh` instead — it runs the decode server in your Terminal
+> session, which already has the right permissions.
+
 ### Custom CrossOver Location
 
 ```bash

@@ -43,8 +43,11 @@ shutdown() {
     SHUTTING_DOWN=1
     echo "[decode_server] Shutting down..."
 
-    # Kill any running ffmpeg processes
-    for pid in "${FFMPEG_PIDS[@]}"; do
+    # Kill any running ffmpeg processes.
+    # Use ${arr[@]+"${arr[@]}"} idiom to safely expand a possibly-empty array
+    # under `set -u` on bash 3.2 (default macOS bash), which otherwise errors
+    # with "unbound variable" if no ffmpegs were ever spawned.
+    for pid in ${FFMPEG_PIDS[@]+"${FFMPEG_PIDS[@]}"}; do
         kill "$pid" 2>/dev/null
     done
 
